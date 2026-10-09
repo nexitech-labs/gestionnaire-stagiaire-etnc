@@ -851,7 +851,53 @@
 
 <script src="vendor/sql-wasm.js"></script>
 <script src="vendor/sql-wasm-binary.js"></script>
-<script src="baremes-defaut.js"></script>
-<script src="app.js"></script>
+<!-- Application : scripts classiques (pas de modules) pour fonctionner en ouvrant directement index.html (file://).
+     L'ordre compte : chaque fichier peut utiliser ce qui est déclaré dans les fichiers chargés avant lui. -->
+<!-- Noyau : constantes, utilitaires, état, éléments d'interface communs -->
+<script src="src/noyau/constantes.js"></script>
+<script src="src/stockage/schema.js"></script>
+<script src="src/noyau/utilitaires.js"></script>
+<script src="src/noyau/etat.js"></script>
+<script src="src/noyau/interface.js"></script>
+<!-- Stockage : dossier du projet et base SQLite (db/ccpg.db) -->
+<script src="src/stockage/memoire-dossier.js"></script>
+<script src="src/stockage/acces-dossier.js"></script>
+<script src="src/stockage/base-de-donnees.js"></script>
+<!-- Navigation et pages générales -->
+<script src="src/navigation/navigation.js"></script>
+<script src="src/accueil/accueil.js"></script>
+<script src="src/sections/sections.js"></script>
+<script src="src/stagiaires/stagiaires.js"></script>
+<!-- Barèmes et coefficients -->
+<script src="src/baremes/baremes-defaut.js"></script>
+<script src="src/baremes/versions.js"></script>
+<script src="src/baremes/coefficients.js"></script>
+<script src="src/baremes/page-baremes.js"></script>
+<script src="src/baremes/echange.js"></script>
+<!-- Saisie des notes -->
+<script src="src/notes/calcul.js"></script>
+<script src="src/notes/moyennes.js"></script>
+<script src="src/notes/saisie.js"></script>
+<script src="src/notes/physiques.js"></script>
+<script src="src/notes/exemption.js"></script>
+<!-- Impression et exports -->
+<script src="src/impression/impression.js"></script>
+<script src="src/export/xlsx.js"></script>
+<script src="src/notes/export-notes.js"></script>
+<!-- Emploi du temps -->
+<script src="src/emploi-du-temps/emploi-du-temps.js"></script>
+<script src="src/emploi-du-temps/activites.js"></script>
+<!-- Fiches terrain, grilles d'évaluation, comportement, relevé individuel -->
+<script src="src/fiches/fiches.js"></script>
+<script src="src/fiches/colonnes.js"></script>
+<script src="src/fiches/impression-fiches.js"></script>
+<script src="src/grilles/grilles.js"></script>
+<script src="src/grilles/editeur-grille.js"></script>
+<script src="src/fiches/peda.js"></script>
+<script src="src/comportement/comportement.js"></script>
+<script src="src/releve/releve.js"></script>
+<!-- Démarrage (en dernier) -->
+<script src="src/app/evenements.js"></script>
+<script src="src/app/demarrage.js"></script>
 </body>
 </html>
