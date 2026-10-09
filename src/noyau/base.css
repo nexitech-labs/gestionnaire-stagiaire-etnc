@@ -1,0 +1,7 @@
+/* CCPG — Styles généraux (complètent Tailwind) */
+body { font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif; }
+[hidden] { display: none !important; }
+.seg-link[aria-current="page"] { background: #fff; color: #09090b; box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .6; }
+th[data-sort] { cursor: pointer; user-select: none; }
+th[data-sort]:hover { color: #09090b; }

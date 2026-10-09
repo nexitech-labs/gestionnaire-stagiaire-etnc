@@ -16,7 +16,7 @@ function seuilDeduit(armee, epreuve, min, max) {
 function insertBaremesDefaut(db, versionId = null) {
   const rows = window.BAREMES_DEFAUT;
   if (!Array.isArray(rows) || !rows.length) {
-    throw new Error("barèmes par défaut introuvables (fichier baremes-defaut.js manquant)");
+    throw new Error("barèmes par défaut introuvables (fichier src/baremes/baremes-defaut.js manquant)");
   }
   // version_id null à la création de la base : rattachée au « Barème initial » par migrerVersionsBaremes
   const stmt = db.prepare(`INSERT INTO baremes
