@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCPG — Suivi des stages</title>
+  <script src="vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Segoe UI"', 'system-ui', '-apple-system', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif; }
+    [hidden] { display: none !important; }
+    .seg-link[aria-current="page"] { background: #fff; color: #09090b; box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+    input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .6; }
+    th[data-sort] { cursor: pointer; user-select: none; }
+    th[data-sort]:hover { color: #09090b; }
+
+    /* ---------- Relevé individuel : attestation de résultats (aperçu et impression, A4 portrait, marges 15 mm) ---------- */
+    .releve-att { width: 180mm; min-height: 262mm; display: flex; flex-direction: column; font-family: Arial, Helvetica, sans-serif;
+      color: #18181b; font-size: 10.5pt; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .releve-att p { margin: 0; }
+    .releve-att .ra-head { display: flex; align-items: center; gap: 8mm; padding-bottom: 5mm; border-bottom: 1.5pt solid #000091; }
+    .releve-att .ra-logo { height: 30mm; width: auto; margin: -3mm 0 -3mm -3mm; }
+    .releve-att .ra-ecole { display: flex; flex-direction: column; gap: 1mm; margin-left: auto; text-align: right; }
+    .releve-att .ra-ecole strong { font-size: 11pt; color: #000091; }
+    .releve-att .ra-ecole span { font-size: 9pt; color: #52525b; }
+    .releve-att .ra-titre { margin: 11mm 0 8mm; text-align: center; font-size: 17pt; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .releve-att .ra-objet { margin-bottom: 6mm; }
+    .releve-att .ra-objet b { text-decoration: underline; text-underline-offset: 2pt; }
+    .releve-att .ra-infos { display: grid; grid-template-columns: repeat(6, auto); justify-content: space-between; gap: 2mm 5mm; margin: 0 0 7mm;
+      padding: 3.5mm 5mm; border-radius: 2mm; background: #f4f4f5; }
+    .releve-att .ra-infos dt { font-size: 7.5pt; letter-spacing: .05em; text-transform: uppercase; color: #71717a; }
+    .releve-att .ra-infos dd { margin: 0; font-weight: 700; }
+    .releve-att .ra-texte { margin-bottom: 7mm; text-align: justify; }
+    :is(#print-sheet, #releve-content) .releve-att table.ra-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+    :is(#print-sheet, #releve-content) .releve-att .ra-table th { padding: 3mm 3mm; border: 0.75pt solid #18181b; background: #e4e4e7;
+      font-size: 9pt; font-weight: 700; letter-spacing: .05em; text-align: center; text-transform: uppercase; vertical-align: middle; }
+    :is(#print-sheet, #releve-content) .releve-att .ra-table td { height: 15mm; padding: 2mm 3mm; border: 0.75pt solid #18181b; font-size: 11pt;
+      text-align: left; vertical-align: middle; background: #fff; }
+    :is(#print-sheet, #releve-content) .releve-att .ra-table td.ra-c { text-align: center; }
+    .releve-att .ra-code { display: inline-block; min-width: 13mm; margin-right: 3mm; padding: 1mm 2mm; border-radius: 1mm; color: #fff;
+      font-size: 9.5pt; font-weight: 700; letter-spacing: .04em; text-align: center; }
+    .releve-att .ra-note { font-size: 13pt; font-weight: 700; }
+    .releve-att .ra-note small { font-size: 9pt; font-weight: 400; color: #71717a; }
+    .releve-att .ra-exempt { font-weight: 700; color: #b45309; }
+    .releve-att .ra-detail { display: block; font-size: 8pt; color: #52525b; }
+    .releve-att .ra-bas { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 12mm; }
+    .releve-att .ra-signature { width: 70mm; text-align: center; }
+    .releve-att .ra-fonction { font-weight: 700; }
+    .releve-att .ra-nom { margin-bottom: 2mm; }
+    .releve-att .ra-signature img { display: block; width: 60mm; height: 26mm; max-width: none; margin: 0 auto; object-fit: contain; }
+    .releve-att .ra-sans-signature { height: 26mm; }
+    .releve-att .ra-pied { margin-top: auto; padding-top: 4mm; border-top: 0.75pt solid #d4d4d8; text-align: center; font-size: 8.5pt; color: #52525b; }
+    .releve-att .ra-mention { margin-bottom: 1.5mm; font-weight: 700; color: #b91c1c; text-transform: uppercase; letter-spacing: .03em; }
+
+    /* ---------- Fiche imprimable (CSS pur : indépendant du moteur Tailwind) ---------- */
+    #print-sheet { display: none; }
+    @media print {
+      @page { size: A4 landscape; margin: 12mm; }
+      html, body { background: #fff !important; }
+      #app { display: none !important; }
+      #print-sheet { display: block !important; color: #000; font-size: 10.5pt; }
+      #print-sheet h1 { font-size: 16pt; font-weight: 700; margin: 0 0 2pt; }
+      #print-sheet .ps-sub { font-size: 10pt; color: #333; margin: 0 0 10pt; }
+      #print-sheet .ps-info { display: grid; grid-template-columns: repeat(5, auto); gap: 4pt 18pt; justify-content: start;
+        border: 1px solid #000; padding: 6pt 8pt; margin-bottom: 10pt; }
+      #print-sheet .ps-info dt { font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; color: #444; }
+      #print-sheet .ps-info dd { margin: 0; font-weight: 600; }
+      #print-sheet table { width: 100%; border-collapse: collapse; }
+      #print-sheet th, #print-sheet td { border: 1px solid #000; padding: 3pt 5pt; text-align: left; vertical-align: top; }
+      #print-sheet th { background: #eee !important; font-size: 9pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      #print-sheet tr { page-break-inside: avoid; }
+      #print-sheet thead { display: table-header-group; }
+      #print-sheet .ps-num { width: 1%; text-align: right; }
+      #print-sheet .ps-upper { text-transform: uppercase; }
+      #print-sheet .ps-r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      #print-sheet .ps-c { text-align: center; }
+      #print-sheet .ps-info.ps-6 { grid-template-columns: repeat(6, auto); }
+      #print-sheet tfoot td { font-weight: 700; background: #f4f4f5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      #print-sheet .ps-foot { margin-top: 8pt; font-size: 9pt; display: flex; justify-content: space-between; }
+      #print-sheet .ps-empty { text-align: center; font-style: italic; padding: 12pt; }
+      #print-sheet .ps-fiche-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12pt; margin: 4pt 0 8pt; white-space: nowrap; }
+      #print-sheet .ps-fiche-head .ps-date { font-size: 11pt; }
+      #print-sheet .ps-fiche-head .ps-stage { text-align: right; font-size: 10pt; }
+      #print-sheet table.ps-fiche { table-layout: fixed; }
+      #print-sheet .ps-page-break { page-break-before: always; break-before: page; }
+      #print-sheet table.ps-grille td { height: 7.5mm; vertical-align: middle; }
+      #print-sheet table.ps-grille .ps-groupe { font-weight: 700; text-transform: uppercase; font-size: 9pt; }
+      #print-sheet table.ps-comp { table-layout: fixed; font-size: 8.5pt; }
+      #print-sheet table.ps-comp td, #print-sheet table.ps-comp th { padding: 1.5pt 3pt; vertical-align: middle; }
+      #print-sheet table.ps-comp .ps-cat td { background: #eee !important; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      #print-sheet table.ps-comp th.ps-nom { width: 7mm; height: 36mm; padding: 2pt 0; vertical-align: bottom; text-align: center; }
+      #print-sheet table.ps-comp th.ps-nom > div { writing-mode: vertical-rl; transform: rotate(180deg); max-height: 36mm; margin: 0 auto;
+        font-size: 7.5pt; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+      #print-sheet table.ps-fiche { font-size: 8.5pt; }
+      #print-sheet table.ps-fiche td { height: 6.8mm; padding: 0 2pt; vertical-align: middle; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      #print-sheet table.ps-fiche th { white-space: normal; overflow: hidden; font-size: 7.5pt; padding: 2pt 1pt; line-height: 1.1; }
+      #print-sheet .ps-fiche-head { flex-wrap: wrap; }
+      #print-sheet .ps-fiche-head .ps-date { display: flex; flex-wrap: wrap; gap: 2pt 14pt; white-space: nowrap; }
+      #print-sheet table.ps-fiche th { text-align: center; }
+      #print-sheet table.ps-fiche .ps-l { text-align: left; }
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-zinc-50 text-zinc-950 antialiased">
+<div id="app">
+
+  <!-- Barre supérieure : retour à l'accueil, fil d'Ariane, section active, état -->
+  <header class="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur">
+    <div class="flex h-14 items-center gap-3 px-4 md:px-8">
+      <a href="#/accueil" class="flex shrink-0 items-center gap-2.5 rounded-md" title="Accueil">
+        <span class="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-900 text-white">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </span>
+        <span class="text-sm font-semibold tracking-tight">CCPG</span>
+      </a>
+      <nav id="crumb" hidden aria-label="Fil d'Ariane" class="flex min-w-0 items-center gap-2 text-sm">
+        <span class="text-zinc-300">/</span>
+        <span id="crumb-title" class="truncate font-medium text-zinc-700"></span>
+      </nav>
+
+      <div class="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
+        <a id="btn-home" href="#/accueil" hidden
+          class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-100">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="hidden sm:inline">Accueil</span>
+        </a>
+        <div id="section-bar" hidden class="flex min-w-0 items-center gap-2">
+          <label for="active-section" class="hidden text-xs font-medium uppercase tracking-wide text-zinc-400 lg:block">Section</label>
+          <select id="active-section"
+            class="h-8 w-40 min-w-0 rounded-md border border-zinc-200 bg-white px-2 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20 sm:w-64"></select>
+        </div>
+        <span id="save-status" role="status" class="inline-flex shrink-0 items-center gap-1.5 text-xs text-zinc-500">
+          <span class="save-dot h-2 w-2 shrink-0 rounded-full bg-zinc-300"></span>
+          <span id="save-text" class="hidden xl:inline">Données non chargées</span>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Bandeau discret : demande d'autorisation au premier geste -->
+  <div id="perm-banner" hidden class="sticky top-14 z-20 border-b border-amber-200 bg-amber-50 text-amber-900">
+    <div class="flex items-center gap-2 px-4 py-2 text-sm md:px-8">
+      <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 15l6 6"/><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+      <span id="perm-banner-text">Cliquez n'importe où pour charger les données</span>
+    </div>
+  </div>
+
+  <!-- Alertes persistantes -->
+  <div id="alerts" class="space-y-2 px-4 pt-4 empty:hidden md:px-8"></div>
+
+  <main class="px-4 py-6 md:px-8">
+
+    <!-- État d'attente -->
+    <section id="waiting" class="rounded-lg border border-dashed border-zinc-300 bg-white p-10 text-center">
+      <p class="text-sm font-medium text-zinc-700">En attente de l'accès au dossier du projet</p>
+      <p class="mt-1 text-sm text-zinc-500">Les données seront affichées dès que la base <code class="rounded bg-zinc-100 px-1 py-0.5 text-xs">db/ccpg.db</code> sera chargée.</p>
+    </section>
+
+    <div id="workspace" hidden>
+      <!-- ============ Accueil : hub central ============ -->
+      <div id="view-home" hidden class="mx-auto max-w-5xl space-y-6 py-2 md:py-6">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h2 class="text-2xl font-semibold tracking-tight">Suivi des stages CCPG</h2>
+            <p id="home-section" class="mt-1 text-sm text-zinc-500"></p>
+          </div>
+          <button type="button" data-open-sections
+            class="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium shadow-sm transition hover:bg-zinc-100">
+            <svg class="h-4 w-4 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 12.5-8.58 3.91a2 2 0 0 1-1.66 0L2 12.5"/><path d="m22 17.5-8.58 3.91a2 2 0 0 1-1.66 0L2 17.5"/></svg>
+            Ajouter / modifier une section
+          </button>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-3">
+          <a href="#/notes" class="group rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30 relative flex flex-col items-center justify-center gap-5 p-6 text-center md:col-span-2 md:row-span-4 md:p-8">
+            <div class="contents">
+              <span class="flex h-16 w-16 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/></svg></span>
+              <svg class="absolute right-6 top-6 h-6 w-6 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-zinc-900 md:right-8 md:top-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+            <h3 class="text-2xl font-semibold tracking-tight">Saisie des notes</h3>
+          </a>
+          <a href="#/stagiaires" class="group rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30 flex items-center gap-4 p-5">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <span class="min-w-0 flex-1">
+              <span class="block font-semibold tracking-tight">Stagiaires</span>
+            </span>
+            <svg class="h-4 w-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-zinc-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+          <a href="#/edt" class="group rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30 flex items-center gap-4 p-5">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-700"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+            <span class="min-w-0 flex-1">
+              <span class="block font-semibold tracking-tight">Emploi du temps</span>
+            </span>
+            <svg class="h-4 w-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-zinc-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+          <a href="#/fiches" class="group rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30 flex items-center gap-4 p-5">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"/></svg></span>
+            <span class="min-w-0 flex-1">
+              <span class="block font-semibold tracking-tight">Fiches terrain</span>
+            </span>
+            <svg class="h-4 w-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-zinc-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+          <a href="#/parametres/baremes" class="group rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30 flex items-center gap-4 p-5">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span>
+            <span class="min-w-0 flex-1">
+              <span class="block font-semibold tracking-tight">Barèmes &amp; coefficients</span>
+            </span>
+            <svg class="h-4 w-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-zinc-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- ============ Page Barèmes ============ -->
+      <div id="view-settings" hidden class="space-y-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-xl font-semibold tracking-tight">Barèmes &amp; coefficients</h2>
+          <nav aria-label="Barèmes et coefficients" class="inline-flex items-center rounded-md bg-zinc-200/70 p-1 text-zinc-500">
+            <a href="#/parametres/baremes" data-settings="baremes" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Barèmes</a>
+            <a href="#/parametres/coefficients" data-settings="coefficients" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Coefficients</a>
+          </nav>
+          <div class="ml-auto flex flex-wrap gap-2">
+            <button id="btn-param-import" type="button" class="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium shadow-sm hover:bg-zinc-100" title="Importer un barème et des coefficients reçus d'un autre moniteur (.json)">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+              Importer
+            </button>
+            <button id="btn-param-export" type="button" class="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium shadow-sm hover:bg-zinc-100" title="Exporter le barème affiché et les coefficients pour les transmettre (.json)">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+              Exporter
+            </button>
+            <input id="param-import-file" type="file" accept=".json,application/json" hidden>
+          </div>
+        </div>
+      <section id="tab-baremes" hidden>
+        <div id="baremes-panel"></div>
+      </section>
+      <section id="tab-coefficients" hidden>
+        <div id="coefs-panel"></div>
+      </section>
+      </div>
+
+      <!-- ============ Partie commune aux onglets liés à une section ============ -->
+      <div id="section-scope" hidden class="space-y-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 id="page-title" class="text-xl font-semibold tracking-tight"></h2>
+          <nav id="fiches-switch" hidden aria-label="Fiches terrain" class="inline-flex flex-wrap items-center rounded-md bg-zinc-200/70 p-1 text-zinc-500">
+            <a href="#/fiches/mco" data-fiche="mco" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Marche-course</a>
+            <a href="#/fiches/natation" data-fiche="natation" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Natation</a>
+            <a href="#/fiches/f2400" data-fiche="f2400" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">2400 m + pompes + tractions</a>
+            <a href="#/fiches/peda" data-fiche="peda" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Évaluation péda</a>
+          </nav>
+          <nav id="edt-switch" hidden aria-label="Emploi du temps" class="inline-flex items-center rounded-md bg-zinc-200/70 p-1 text-zinc-500">
+            <a href="#/edt" data-edt-tab="edt" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Planning</a>
+            <a href="#/edt/activites" data-edt-tab="activites" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Activités</a>
+          </nav>
+          <nav id="notes-switch" hidden aria-label="Type de notes" class="inline-flex items-center rounded-md bg-zinc-200/70 p-1 text-zinc-500">
+            <a href="#/notes/physiques" data-notes="physiques" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Physiques (CCPG)</a>
+            <a href="#/notes/pedagogiques" data-notes="pedagogiques" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Pédagogiques</a>
+            <a href="#/notes/comportement" data-notes="comportement" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Comportement</a>
+            <a href="#/notes/moyenne" data-notes="bilan" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Moyenne</a>
+            <a href="#/notes/releve" data-notes="releve" class="seg-link inline-flex h-7 items-center rounded-sm px-3 text-sm font-medium transition">Relevé individuel</a>
+          </nav>
+          <div class="ml-auto flex flex-wrap gap-2">
+            <button id="btn-print" type="button"
+              class="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-4 text-sm font-medium shadow-sm hover:bg-zinc-100 disabled:pointer-events-none disabled:opacity-50">
+              <span id="btn-print-icon" class="contents"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>
+              <span id="btn-print-label">Imprimer / Exporter PDF</span>
+            </button>
+            <button id="btn-add-stagiaire" type="button"
+              class="inline-flex h-9 items-center gap-1.5 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-50">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              Ajouter un stagiaire
+            </button>
+            <button id="btn-add-creneau" type="button" hidden
+              class="inline-flex h-9 items-center gap-1.5 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-50">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              Ajouter un créneau
+            </button>
+          </div>
+        </div>
+
+        <div id="no-section" hidden class="rounded-lg border border-dashed border-zinc-300 bg-white p-10 text-center">
+          <p class="text-sm font-medium text-zinc-700">Aucune section enregistrée</p>
+          <button type="button" data-open-sections="new" class="mt-4 inline-flex h-9 items-center gap-1.5 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Créer une section
+          </button>
+        </div>
+
+        <div id="section-summary" class="-mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-zinc-500"></div>
+
+      <!-- ============ Page Stagiaires ============ -->
+      <section id="tab-stagiaires" hidden>
+        <div id="stagiaires-card" class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 p-4">
+            <div class="relative w-full sm:w-96">
+              <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input id="search" type="search" autocomplete="off" placeholder="Rechercher (nom, prénom, grade, armée)…"
+                class="flex h-9 w-full rounded-md border border-zinc-200 bg-white pl-9 pr-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20">
+            </div>
+            <p id="stagiaires-count" class="text-sm text-zinc-500"></p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr id="stagiaires-head" class="border-b border-zinc-100 text-left text-xs uppercase tracking-wide text-zinc-500">
+                  <th data-sort="grade" class="px-4 py-3 font-medium">Grade</th>
+                  <th data-sort="nom" class="px-3 py-3 font-medium">Nom</th>
+                  <th data-sort="prenom" class="px-3 py-3 font-medium">Prénom</th>
+                  <th data-sort="armee" class="px-3 py-3 font-medium">Armée</th>
+                  <th data-sort="origine_recrutement" class="px-3 py-3 font-medium">Origine</th>
+                  <th data-sort="sexe" class="px-3 py-3 font-medium">Sexe</th>
+                  <th data-sort="date_naissance" class="px-3 py-3 font-medium">Naissance</th>
+                  <th data-sort="derniere_visite_medicale" class="px-3 py-3 font-medium">Dernière VM</th>
+                  <th class="px-4 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="stagiaires-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Page Emploi du temps (feuille « EDT » de l'Excel) ============ -->
+      <section id="tab-edt" hidden class="space-y-4">
+        <div class="grid gap-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm md:grid-cols-2">
+          <div class="space-y-1.5">
+            <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Moniteur EPMS</p>
+            <div class="flex gap-2">
+              <span id="edt-moniteur-nom" class="flex h-9 min-w-0 flex-1 items-center truncate rounded-md border border-zinc-100 bg-zinc-50 px-3 text-sm font-medium"></span>
+              <input id="edt-poste-moniteur" data-section-col="poste_moniteur" autocomplete="off" placeholder="Poste" aria-label="Poste du moniteur"
+                class="h-9 w-40 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20">
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <label for="edt-chef" class="block text-xs font-medium uppercase tracking-wide text-zinc-500">Chef de section</label>
+            <div class="flex gap-2">
+              <input id="edt-chef" data-section-col="chef_section" autocomplete="off" placeholder="Grade et nom"
+                class="h-9 min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20">
+              <input id="edt-poste-chef" data-section-col="poste_chef" autocomplete="off" placeholder="Poste" aria-label="Poste du chef de section"
+                class="h-9 w-40 rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20">
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500">
+                  <th class="px-4 py-3 font-medium">Semaine</th>
+                  <th class="px-3 py-3 font-medium">Date</th>
+                  <th class="px-3 py-3 font-medium">Heure</th>
+                  <th class="px-3 py-3 font-medium">Moniteur</th>
+                  <th class="px-3 py-3 font-medium">Cours SAGAIE</th>
+                  <th class="px-3 py-3 font-medium">Activité réalisée</th>
+                  <th class="px-3 py-3 font-medium">Obs.</th>
+                  <th class="px-4 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="edt-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Fiches terrain (feuilles M_CO, CCPM natation, CCPM 2400 + pompes + tractions) ============ -->
+      <section id="tab-fiches" hidden>
+        <div id="fiche-content"></div>
+      </section>
+
+      <!-- ============ Liste des activités (menus de l'emploi du temps) ============ -->
+      <section id="tab-activites" hidden>
+        <div class="max-w-2xl rounded-lg border border-zinc-200 bg-white shadow-sm">
+          <form id="activite-add-form" novalidate class="flex gap-2 border-b border-zinc-100 p-4">
+            <input id="activite-new" autocomplete="off" maxlength="120" placeholder="Nouvelle activité" aria-label="Nouvelle activité" class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+            <button type="submit"
+              class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              Ajouter
+            </button>
+          </form>
+          <ul id="activites-list" class="divide-y divide-zinc-100"></ul>
+        </div>
+      </section>
+
+      <!-- ============ Page Saisie des notes ============ -->
+      <div id="tab-notes" hidden class="space-y-4">
+
+      <section id="tab-physiques" hidden class="space-y-4">
+        <div id="phys-subtabs" role="tablist" aria-label="Épreuves physiques" class="flex flex-wrap gap-2"></div>
+        <div id="phys-content"></div>
+      </section>
+
+      <section id="tab-pedagogiques" hidden>
+        <div class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 p-4">
+            <div>
+              <h2 class="font-semibold tracking-tight">Notes pédagogiques</h2>
+            </div>
+            <p id="pedagogiques-count" class="text-sm text-zinc-500"></p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead id="pedagogiques-head"></thead>
+              <tbody id="pedagogiques-tbody"></tbody>
+              <tfoot id="pedagogiques-foot"></tfoot>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      </div>
+
+      <!-- ============ Relevé individuel (feuille « Relevé individuel » de l'Excel) ============ -->
+      <section id="tab-comportement" hidden>
+        <div id="comportement-content"></div>
+      </section>
+
+      <section id="tab-releve" hidden>
+        <div id="releve-content"></div>
+      </section>
+
+      <!-- ============ Page Moyenne (bilan) ============ -->
+      <section id="tab-bilan" hidden>
+        <div class="rounded-lg border border-zinc-200 bg-white shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 p-4">
+            <div>
+              <h2 class="font-semibold tracking-tight">Moyennes par stagiaire</h2>
+            </div>
+            <p id="bilan-count" class="text-sm text-zinc-500"></p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-zinc-100 text-left text-xs uppercase tracking-wide text-zinc-500">
+                  <th class="px-4 py-3 font-medium">Grade</th>
+                  <th class="px-3 py-3 font-medium">Nom</th>
+                  <th class="px-3 py-3 font-medium">Prénom</th>
+                  <th class="px-3 py-3 text-right font-medium">Moyenne physique</th>
+                  <th class="px-3 py-3 text-right font-medium">Moyenne pédagogique</th>
+                  <th class="px-4 py-3 text-right font-medium">Moyenne E²PMS</th>
+                </tr>
+              </thead>
+              <tbody id="bilan-tbody"></tbody>
+              <tfoot id="bilan-foot"></tfoot>
+            </table>
+          </div>
+        </div>
+      </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- Listes de suggestions -->
+  <datalist id="dl-grades"></datalist>
+
+  <!-- ============ Modale : accès au dossier ============ -->
+  <div id="access-modal" hidden class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="access-title">
+    <div class="w-full max-w-lg rounded-lg border border-zinc-200 bg-white p-6 shadow-lg">
+      <div class="flex items-start gap-3">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+        </div>
+        <div>
+          <h2 id="access-title" class="text-lg font-semibold tracking-tight">Accès au dossier du projet</h2>
+          <p class="mt-1.5 text-sm text-zinc-500">L'application enregistre ses données dans <code class="rounded bg-zinc-100 px-1 py-0.5 text-xs">db/ccpg.db</code>. Sélectionnez le dossier racine du projet (celui qui contient <code class="rounded bg-zinc-100 px-1 py-0.5 text-xs">index.html</code>).</p>
+        </div>
+      </div>
+
+      <p id="access-info" hidden class="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"></p>
+
+      <div class="mt-5 space-y-1.5">
+        <p class="text-sm font-medium">Chemin du dossier</p>
+        <div class="flex gap-2">
+          <code id="access-path" class="flex min-h-9 flex-1 items-center break-all rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 font-mono text-xs"></code>
+          <button id="btn-copy-path" type="button"
+            class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium shadow-sm hover:bg-zinc-100">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span id="btn-copy-label">Copier</span>
+          </button>
+        </div>
+        <p class="text-xs text-zinc-500">Le chemin est copié automatiquement : dans la fenêtre Windows, collez-le (Ctrl+V) dans le champ « Dossier », puis validez.</p>
+      </div>
+
+      <p id="access-error" hidden class="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></p>
+
+      <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button id="btn-access-cancel" type="button" hidden
+          class="inline-flex h-10 items-center justify-center rounded-md border border-zinc-200 bg-white px-4 text-sm font-medium shadow-sm hover:bg-zinc-100">Annuler</button>
+        <button id="btn-authorize" type="button"
+          class="inline-flex h-10 items-center justify-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800">Autoriser l'accès au dossier du projet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Modale : sections (ajout, modification, sélection) ============ -->
+  <div id="sections-modal" hidden class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:items-center"
+    role="dialog" aria-modal="true" aria-labelledby="sections-modal-title">
+    <div class="w-full max-w-7xl overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 shadow-lg">
+      <div class="flex items-center justify-between gap-4 border-b border-zinc-200 bg-white px-6 py-4">
+        <div>
+          <h2 id="sections-modal-title" class="text-lg font-semibold tracking-tight">Sections</h2>
+        </div>
+        <button type="button" data-close-sections class="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900" aria-label="Fermer">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="max-h-[80vh] overflow-y-auto p-4 sm:p-6">
+          <section id="tab-sections" class="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+            <form id="section-form" novalidate class="h-fit rounded-lg border border-zinc-200 bg-white shadow-sm">
+              <div class="border-b border-zinc-100 p-5">
+                <h2 id="section-form-title" class="font-semibold tracking-tight">Nouvelle section</h2>
+              </div>
+              <div class="space-y-4 p-5">
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="space-y-1.5">
+                    <label for="sf-formation" class="text-sm font-medium">Formation <span class="text-red-600">*</span></label>
+                    <select id="sf-formation" name="formation" required
+                      class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+                      <option value="">—</option>
+                      <option value="CT1">CT1</option>
+                      <option value="CT2">CT2</option>
+                    </select>
+                  </div>
+                  <div class="space-y-1.5">
+                    <label for="sf-annee" class="text-sm font-medium">Année scolaire <span class="text-red-600">*</span></label>
+                    <input id="sf-annee" name="annee_scolaire" required type="number" min="2000" max="2100" step="1" inputmode="numeric" autocomplete="off" placeholder="2026"
+                      class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+                  </div>
+                </div>
+                <fieldset class="space-y-1.5">
+                  <legend class="text-sm font-medium">Période de stage</legend>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label for="sf-debut" class="mb-1 block text-xs text-zinc-500">Début</label>
+                      <input id="sf-debut" name="date_debut" type="date"
+                        class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+                    </div>
+                    <div>
+                      <label for="sf-fin" class="mb-1 block text-xs text-zinc-500">Fin</label>
+                      <input id="sf-fin" name="date_fin" type="date"
+                        class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+                    </div>
+                  </div>
+                </fieldset>
+                <div class="space-y-1.5">
+                  <label for="sf-moniteur" class="text-sm font-medium">Moniteur (grade et nom) <span class="text-red-600">*</span></label>
+                  <input id="sf-moniteur" name="moniteur" required autocomplete="off" placeholder="SCH DUPONT"
+                    class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+                </div>
+                <div class="space-y-1.5">
+                  <label for="sf-bareme" class="text-sm font-medium">Barème et coefficients</label>
+                  <select id="sf-bareme" name="bareme"
+                    class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400"></select>
+                  <p class="text-xs text-zinc-500">La section garde ce barème et ces coefficients même s'ils sont modifiés ensuite.</p>
+                </div>
+                <p id="section-form-error" hidden class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></p>
+              </div>
+              <div class="flex justify-end gap-2 border-t border-zinc-100 p-5">
+                <button id="section-form-cancel" type="button" hidden
+                  class="inline-flex h-9 items-center rounded-md border border-zinc-200 bg-white px-4 text-sm font-medium shadow-sm hover:bg-zinc-100">Annuler</button>
+                <button id="section-form-submit" type="submit"
+                  class="inline-flex h-9 items-center gap-1.5 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                  <span>Ajouter la section</span>
+                </button>
+              </div>
+            </form>
+
+            <div class="min-w-0 rounded-lg border border-zinc-200 bg-white shadow-sm">
+              <div class="flex items-center justify-between border-b border-zinc-100 p-5">
+                <div>
+                  <h2 class="font-semibold tracking-tight">Sections enregistrées</h2>
+                  <p id="sections-count" class="mt-1 text-sm text-zinc-500"></p>
+                </div>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-zinc-100 text-left text-xs uppercase tracking-wide text-zinc-500">
+                      <th class="px-5 py-3 font-medium">Formation</th>
+                      <th class="px-3 py-3 font-medium">Année</th>
+                      <th class="px-3 py-3 font-medium">Période</th>
+                      <th class="px-3 py-3 font-medium">Moniteur</th>
+                      <th class="px-3 py-3 text-right font-medium">Effectif</th>
+                      <th class="px-5 py-3 text-right font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sections-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Modale : créneau d'emploi du temps ============ -->
+  <div id="edt-modal" hidden class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="edt-modal-title">
+    <form id="edt-form" novalidate class="max-h-[95vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-lg">
+      <div class="p-6 pb-0">
+        <h2 id="edt-modal-title" class="text-lg font-semibold tracking-tight">Ajouter un créneau</h2>
+      </div>
+      <div class="grid gap-4 p-6 sm:grid-cols-6">
+        <div class="space-y-1.5 sm:col-span-2">
+          <label for="edt-date" class="text-sm font-medium">Date <span class="text-red-600">*</span></label>
+          <input id="edt-date" type="date" required class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+        </div>
+        <div class="space-y-1.5 sm:col-span-2">
+          <label for="edt-debut" class="text-sm font-medium">Début</label>
+          <input id="edt-debut" type="time" class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+        </div>
+        <div class="space-y-1.5 sm:col-span-2">
+          <label for="edt-fin" class="text-sm font-medium">Fin</label>
+          <input id="edt-fin" type="time" class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+        </div>
+        <div class="space-y-1.5 sm:col-span-6">
+          <label for="edt-moniteur" class="text-sm font-medium">Moniteur</label>
+          <input id="edt-moniteur" autocomplete="off" placeholder="Grade et nom" class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+        </div>
+        <div class="space-y-1.5 sm:col-span-6">
+          <div class="flex items-baseline justify-between gap-2">
+            <label for="edt-cours-select" class="text-sm font-medium">Cours SAGAIE <span class="font-normal text-zinc-400">(activité annoncée)</span></label>
+            <a href="#/edt/activites" data-close-edt class="text-xs font-medium text-zinc-500 underline-offset-4 hover:text-zinc-900 hover:underline">Modifier la liste</a>
+          </div>
+          <select id="edt-cours-select" data-combo="edt-cours" class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400"></select>
+          <input id="edt-cours" hidden autocomplete="off" maxlength="120" placeholder="Saisir l'activité" aria-label="Cours SAGAIE (saisie libre)" class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400 mt-2">
+        </div>
+        <div class="space-y-1.5 sm:col-span-6">
+          <label for="edt-activite-select" class="text-sm font-medium">Activité réalisée <span class="font-normal text-zinc-400">(si différente, en cas d'imprévu)</span></label>
+          <select id="edt-activite-select" data-combo="edt-activite" class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400"></select>
+          <input id="edt-activite" hidden autocomplete="off" maxlength="120" placeholder="Saisir l'activité réalisée" aria-label="Activité réalisée (saisie libre)" class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400 mt-2">
+        </div>
+        <div class="space-y-1.5 sm:col-span-6">
+          <label for="edt-obs" class="text-sm font-medium">Observations</label>
+          <input id="edt-obs" autocomplete="off" class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+        </div>
+        <p id="edt-form-error" hidden class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-6"></p>
+      </div>
+      <div class="flex flex-col-reverse gap-2 border-t border-zinc-100 p-6 sm:flex-row sm:justify-end">
+        <button type="button" data-close-edt
+          class="inline-flex h-9 items-center justify-center rounded-md border border-zinc-200 bg-white px-4 text-sm font-medium shadow-sm hover:bg-zinc-100">Annuler</button>
+        <button type="submit"
+          class="inline-flex h-9 items-center justify-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ============ Modale : colonnes d'une fiche terrain ============ -->
+  <div id="cols-modal" hidden class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="cols-modal-title">
+    <div class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg">
+      <div class="flex items-center justify-between gap-4 border-b border-zinc-100 px-6 py-4">
+        <h2 id="cols-modal-title" class="text-lg font-semibold tracking-tight">Colonnes</h2>
+        <button type="button" data-close-cols class="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900" aria-label="Fermer">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <ul id="cols-list" class="flex-1 divide-y divide-zinc-100 overflow-y-auto"></ul>
+      <form id="col-add-form" novalidate class="flex gap-2 border-t border-zinc-100 p-4">
+        <input id="col-new" autocomplete="off" maxlength="40" placeholder="Nouvelle colonne" aria-label="Nom de la nouvelle colonne" class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-400">
+        <button type="submit" class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          Ajouter
+        </button>
+      </form>
+      <div class="flex justify-between gap-2 border-t border-zinc-100 px-4 py-3">
+        <button type="button" id="btn-cols-reset" class="inline-flex h-9 items-center rounded-md px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-100">Colonnes d'origine</button>
+        <button type="button" data-close-cols class="inline-flex h-9 items-center rounded-md border border-zinc-200 bg-white px-4 text-sm font-medium shadow-sm hover:bg-zinc-100">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Modale : impression des fiches terrain ============ -->
+  <div id="print-modal" hidden class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="print-modal-title">
+    <div class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg">
+      <div class="flex items-center justify-between gap-4 border-b border-zinc-100 px-6 py-4">
+        <h2 id="print-modal-title" class="text-lg font-semibold tracking-tight">Imprimer / exporter des fiches</h2>
+        <button type="button" data-close-print class="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900" aria-label="Fermer">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <label class="flex cursor-pointer items-center gap-3 border-b border-zinc-100 bg-zinc-50 px-6 py-3 text-sm font-medium">
+        <input type="checkbox" id="print-all" class="h-4 w-4 shrink-0 rounded border-zinc-300 accent-zinc-900">
+        <span class="flex-1">Tout sélectionner</span>
+        <span id="print-count" class="text-xs tabular-nums text-zinc-500"></span>
+      </label>
+      <ul id="print-list" class="flex-1 divide-y divide-zinc-100 overflow-y-auto"></ul>
+      <div class="flex items-center justify-between gap-2 border-t border-zinc-100 px-4 py-3">
+        <p class="text-xs text-zinc-500">Un seul document, chaque fiche sur une nouvelle page.</p>
+        <div class="flex shrink-0 gap-2">
+          <button type="button" data-close-print class="inline-flex h-9 items-center rounded-md border border-zinc-200 bg-white px-4 text-sm font-medium shadow-sm hover:bg-zinc-100">Annuler</button>
+          <button type="button" id="print-go"
+            class="inline-flex h-9 items-center gap-1.5 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800 disabled:pointer-events-none disabled:opacity-50">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span>Imprimer / PDF</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Modale : personnalisation des grilles péda / comportement ============ -->
+  <div id="grille-modal" hidden class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="grille-modal-title">
+    <div class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg">
+      <div class="flex items-center justify-between gap-4 border-b border-zinc-100 px-6 py-4">
+        <div>
+          <h2 id="grille-modal-title" class="text-lg font-semibold tracking-tight">Personnaliser la grille</h2>
+          <p id="grille-total" class="mt-0.5 text-sm text-zinc-500"></p>
+        </div>
+        <button type="button" data-close-grille class="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900" aria-label="Fermer">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="grille-body" class="flex-1 space-y-4 overflow-y-auto bg-zinc-50 p-4"></div>
+      <p id="grille-error" hidden class="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></p>
+      <div class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 px-4 py-3">
+        <button type="button" data-grille-act="reset" class="inline-flex h-9 items-center rounded-md px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-100">Grille d'origine (Excel)</button>
+        <div class="flex gap-2">
+          <button type="button" data-close-grille class="inline-flex h-9 items-center rounded-md border border-zinc-200 bg-white px-4 text-sm font-medium shadow-sm hover:bg-zinc-100">Annuler</button>
+          <button type="button" data-grille-act="save" class="inline-flex h-9 items-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Modale : export des notes (impression, PDF, Excel) ============ -->
+  <div id="export-modal" hidden class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+    <div class="w-full max-w-md overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg">
+      <div class="flex items-center justify-between gap-4 border-b border-zinc-100 px-6 py-4">
+        <div>
+          <h2 id="export-modal-title" class="text-lg font-semibold tracking-tight">Exporter toutes les notes</h2>
+          <p class="mt-0.5 text-sm text-zinc-500">Tableaux de la section : épreuves physiques, récapitulatif, pédagogiques, notes écrites des exemptés et moyennes. Les relevés individuels s'impriment depuis l'onglet « Relevé individuel ».</p>
+        </div>
+        <button type="button" data-close-export class="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900" aria-label="Fermer">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="space-y-2 bg-zinc-50 p-4">
+          <button type="button" data-export="print" class="group flex w-full items-center gap-4 rounded-lg border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-700"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>
+            <span class="min-w-0 flex-1"><span class="block font-medium">Imprimer</span><span class="block text-sm text-zinc-500">Un seul document, chaque tableau sur sa page.</span></span>
+          </button>
+          <button type="button" data-export="pdf" class="group flex w-full items-center gap-4 rounded-lg border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-700"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 12v6M9 15l3 3 3-3"/></svg></span>
+            <span class="min-w-0 flex-1"><span class="block font-medium">Exporter en PDF</span><span class="block text-sm text-zinc-500">Choisir « Enregistrer au format PDF » dans la fenêtre d'impression.</span></span>
+          </button>
+          <button type="button" data-export="excel" class="group flex w-full items-center gap-4 rounded-lg border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/30">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg></span>
+            <span class="min-w-0 flex-1"><span class="block font-medium">Exporter en Excel (.xlsx)</span><span class="block text-sm text-zinc-500">Feuille « Notes » au format du fichier Excel.</span></span>
+          </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Modale : stagiaire ============ -->
+  <div id="stagiaire-modal" hidden class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="stagiaire-modal-title">
+    <form id="stagiaire-form" novalidate class="max-h-[95vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-lg">
+      <div class="p-6 pb-0">
+        <h2 id="stagiaire-modal-title" class="text-lg font-semibold tracking-tight">Ajouter un stagiaire</h2>
+      </div>
+      <div class="grid gap-4 p-6 sm:grid-cols-6">
+        <div class="space-y-1.5 sm:col-span-6">
+          <label for="st-section" class="text-sm font-medium">Section <span class="text-red-600">*</span></label>
+          <select id="st-section" name="section_id" required
+            class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20"></select>
+        </div>
+        <div class="space-y-1.5 sm:col-span-2">
+          <label for="st-grade" class="text-sm font-medium">Grade <span class="text-red-600">*</span></label>
+          <input id="st-grade" name="grade" required list="dl-grades" autocomplete="off" placeholder="CPL"
+            class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm uppercase shadow-sm placeholder:normal-case placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/20">
+        </div>
+        <div class="space-y-1.5 sm:col-span-2">
+          <label for="st-nom" class="text-sm font-medium">Nom <span class="text-red-600">*</span></label>
+          <input id="st-nom" name="nom" required autocomplete="off"
+            class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm uppercase shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20">
+        </div>
+        <div class="space-y-1.5 sm:col-span-2">
+          <label for="st-prenom" class="text-sm font-medium">Prénom <span class="text-red-600">*</span></label>
+          <input id="st-prenom" name="prenom" required autocomplete="off"
+            class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20">
+        </div>
+        <div class="space-y-1.5 sm:col-span-3">
+          <label for="st-armee" class="text-sm font-medium">Armée</label>
+          <select id="st-armee" name="armee"
+            class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20"></select>
+        </div>
+        <div class="space-y-1.5 sm:col-span-3">
+          <label for="st-origine" class="text-sm font-medium">Origine de recrutement</label>
+          <select id="st-origine" name="origine_recrutement"
+            class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20"></select>
+        </div>
+        <div class="space-y-1.5 sm:col-span-2">
+          <label for="st-sexe" class="text-sm font-medium">Sexe <span class="text-red-600">*</span></label>
+          <select id="st-sexe" name="sexe" required
+            class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20">
+            <option value="">—</option>
+            <option value="M">M</option>
+            <option value="F">F</option>
+          </select>
+        </div>
+        <div class="space-y-1.5 sm:col-span-2">
+          <label for="st-naissance" class="text-sm font-medium">Date de naissance</label>
+          <input id="st-naissance" name="date_naissance" type="date"
+            class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20">
+        </div>
+        <div class="space-y-1.5 sm:col-span-2">
+          <label for="st-vm" class="text-sm font-medium">Dernière visite médicale</label>
+          <input id="st-vm" name="derniere_visite_medicale" type="date"
+            class="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20">
+        </div>
+        <p id="stagiaire-form-error" hidden class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-6"></p>
+      </div>
+      <div class="flex flex-col-reverse gap-2 border-t border-zinc-100 p-6 sm:flex-row sm:justify-end">
+        <button type="button" data-close-modal
+          class="inline-flex h-9 items-center justify-center rounded-md border border-zinc-200 bg-white px-4 text-sm font-medium shadow-sm hover:bg-zinc-100">Annuler</button>
+        <button id="stagiaire-form-submit" type="submit"
+          class="inline-flex h-9 items-center justify-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow hover:bg-zinc-800">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ============ Modale : confirmation ============ -->
+  <div id="confirm-modal" hidden class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <div class="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 shadow-lg">
+      <h2 id="confirm-title" class="text-lg font-semibold tracking-tight"></h2>
+      <p id="confirm-message" class="mt-2 whitespace-pre-line text-sm text-zinc-500"></p>
+      <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button id="confirm-cancel" type="button"
+          class="inline-flex h-9 items-center justify-center rounded-md border border-zinc-200 bg-white px-4 text-sm font-medium shadow-sm hover:bg-zinc-100">Annuler</button>
+        <button id="confirm-ok" type="button"
+          class="inline-flex h-9 items-center justify-center rounded-md bg-red-600 px-4 text-sm font-medium text-white shadow hover:bg-red-700">Supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notifications -->
+  <div id="toasts" class="pointer-events-none fixed bottom-4 right-4 z-[70] flex w-80 flex-col gap-2"></div>
+</div>
+
+<!-- Fiche imprimable (remplie par app.js) -->
+<div id="print-sheet"></div>
+
+<script src="vendor/sql-wasm.js"></script>
+<script src="vendor/sql-wasm-binary.js"></script>
+<script src="baremes-defaut.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
