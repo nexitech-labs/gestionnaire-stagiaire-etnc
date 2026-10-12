@@ -4365,6 +4365,8 @@
   // Couleurs des pastilles ECR / CMG / AA (teintes de la feuille Excel, assombries pour le texte blanc)
   const RELEVE_COULEURS = { ecr: "#0f9f5a", cmg: "#c0504d", aisance_aquatique: "#2f8fae" };
   const RELEVE_LOGO = "assets/logo-ministere-armees.svg";
+  const RELEVE_LOGO_ECOLE = "assets/ETNC.png"; // logo de l'école par défaut (en haut à droite)
+  const RELEVE_SANS_LOGO = "aucun"; // valeur de « releve_logo » quand le moniteur a retiré le logo
   const SIGNATURE_MAX_OCTETS = 1024 * 1024;
 
   function getParametre(cle) {
@@ -4382,9 +4384,11 @@
     return getParametre("releve_ecole") || RELEVE_ECOLE;
   }
 
-  /** Logo de l'école en haut à droite du relevé (image importée) ; null si aucun. */
+  /** Logo de l'école en haut à droite du relevé : image importée, sinon logo ETNC ; null si retiré. */
   function releveLogoEcole() {
-    return getParametre("releve_logo") || null;
+    const logo = getParametre("releve_logo");
+    if (logo === RELEVE_SANS_LOGO) return null;
+    return logo || RELEVE_LOGO_ECOLE;
   }
 
   /** Signature du relevé : image importée par le moniteur ; null si aucune ou désactivée. */
@@ -4504,6 +4508,7 @@
     const active = getParametre("releve_signature_active") !== "0";
     const signature = getParametre("releve_signature");
     const logoEcole = releveLogoEcole();
+    const logoParam = getParametre("releve_logo"); // null : logo ETNC par défaut
     const btn = "inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium shadow-sm hover:bg-zinc-100";
 
     $("releve-content").innerHTML = `
@@ -4554,12 +4559,13 @@
             <div class="flex h-24 items-center justify-center rounded-md border border-dashed border-zinc-200 bg-zinc-50 p-2">
               <img src="${esc(logoEcole)}" alt="Logo de l'école" class="max-h-full max-w-full object-contain">
             </div>` : `
-            <p class="text-sm text-zinc-500">Aucun logo : importez une image pour l'afficher en haut du relevé à la place du nom de l'école et de la section.</p>`}
+            <p class="text-sm text-zinc-500">Aucun logo : le nom de l'école et la section s'affichent en haut du relevé.</p>`}
             <label class="${btn} cursor-pointer">
               <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" data-releve-logo-file class="sr-only">
               ${logoEcole ? "Remplacer le logo…" : "Importer un logo…"}
             </label>
-            ${logoEcole ? `<button type="button" data-releve-logo-reset class="${btn} text-red-600">Supprimer le logo</button>` : ""}
+            ${logoParam ? `<button type="button" data-releve-logo-default class="${btn}">Rétablir le logo ETNC</button>` : ""}
+            ${logoEcole ? `<button type="button" data-releve-logo-reset class="${btn} text-red-600">Retirer le logo</button>` : ""}
           </div>
         </div>
 
@@ -5228,11 +5234,10 @@ ${feuilles.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" 
         state.releveSid = Number(pick.dataset.releveSelect);
         renderReleve(getSection(state.activeSectionId));
       }
-      const reset = e.target.closest("[data-releve-signature-reset], [data-releve-logo-reset], [data-releve-ecole-reset]");
+      const reset = e.target.closest("[data-releve-signature-reset], [data-releve-logo-reset], [data-releve-logo-default], [data-releve-ecole-reset]");
       if (reset) {
-        const cle = reset.matches("[data-releve-signature-reset]") ? "releve_signature"
-          : reset.matches("[data-releve-logo-reset]") ? "releve_logo" : "releve_ecole";
-        setParametre(cle, null);
+        if (reset.matches("[data-releve-logo-reset]")) setParametre("releve_logo", RELEVE_SANS_LOGO); // sans logo : texte de l'école
+        else setParametre(reset.matches("[data-releve-signature-reset]") ? "releve_signature" : reset.matches("[data-releve-logo-default]") ? "releve_logo" : "releve_ecole", null);
         persist();
         renderReleve(getSection(state.activeSectionId));
       }
@@ -5340,6 +5345,7 @@ ${feuilles.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" 
     $("print-modal").addEventListener("click", onPrintModalClick);
     // Logo du relevé en cache : disponible aussi pour Ctrl+P
     new Image().src = RELEVE_LOGO;
+    new Image().src = RELEVE_LOGO_ECOLE;
     window.addEventListener("beforeprint", buildPrintSheet);
   }
 
