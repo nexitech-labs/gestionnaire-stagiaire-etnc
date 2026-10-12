@@ -95,8 +95,11 @@ function bindEvents() {
       state.releveSid = Number(pick.dataset.releveSelect);
       renderReleve(getSection(state.activeSectionId));
     }
-    if (e.target.closest("[data-releve-signature-reset]")) {
-      setParametre("releve_signature", null);
+    const reset = e.target.closest("[data-releve-signature-reset], [data-releve-logo-reset], [data-releve-ecole-reset]");
+    if (reset) {
+      const cle = reset.matches("[data-releve-signature-reset]") ? "releve_signature"
+        : reset.matches("[data-releve-logo-reset]") ? "releve_logo" : "releve_ecole";
+      setParametre(cle, null);
       persist();
       renderReleve(getSection(state.activeSectionId));
     }
