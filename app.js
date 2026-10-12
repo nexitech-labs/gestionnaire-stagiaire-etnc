@@ -4377,6 +4377,16 @@
     else upsert("parametres", ["cle"], ["cle", "valeur"], [cle, String(valeur)]);
   }
 
+  /** Nom de l'école en en-tête et en pied du relevé : texte saisi par le moniteur, sinon celui par défaut. */
+  function releveEcole() {
+    return getParametre("releve_ecole") || RELEVE_ECOLE;
+  }
+
+  /** Logo de l'école en haut à droite du relevé (image importée) ; null si aucun. */
+  function releveLogoEcole() {
+    return getParametre("releve_logo") || null;
+  }
+
   /** Signature du relevé : image importée par le moniteur ; null si aucune ou désactivée. */
   function releveSignature() {
     if (getParametre("releve_signature_active") === "0") return null;
@@ -4419,14 +4429,17 @@
         <td class="ra-c ra-note">${l.note == null ? "—" : `${esc(fmtNote(l.note))}<small> / ${NOTE_MAX}</small>`}</td>
       </tr>`).join("");
     const info = (label, value) => `<div><dt>${label}</dt><dd>${value || "—"}</dd></div>`;
+    const ecole = releveEcole();
+    const logo = releveLogoEcole();
     return `
       <div class="releve-att">
         <header class="ra-head">
           <img class="ra-logo" src="${esc(RELEVE_LOGO)}" alt="Ministère des Armées">
+          ${logo ? `<img class="ra-logo-ecole" src="${esc(logo)}" alt="Logo de l'école">` : `
           <div class="ra-ecole">
-            <strong>${esc(RELEVE_ECOLE)}</strong>
+            <strong>${esc(ecole)}</strong>
             <span>Section EPMS — ${esc(s.formation)} · Année scolaire ${esc(s.annee_scolaire)}</span>
-          </div>
+          </div>`}
         </header>
 
         <h1 class="ra-titre">${esc(RELEVE_TITRE)}</h1>
@@ -4462,7 +4475,7 @@
 
         <footer class="ra-pied">
           <p class="ra-mention">En cas de perte, aucun duplicata ne sera délivré.</p>
-          <p>${esc(RELEVE_ECOLE)}</p>
+          <p>${esc(ecole)}</p>
         </footer>
       </div>`;
   }
@@ -4490,6 +4503,7 @@
       </div>`).join("");
     const active = getParametre("releve_signature_active") !== "0";
     const signature = getParametre("releve_signature");
+    const logoEcole = releveLogoEcole();
     const btn = "inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium shadow-sm hover:bg-zinc-100";
 
     $("releve-content").innerHTML = `
@@ -4527,6 +4541,26 @@
             </label>
             ${signature ? `<button type="button" data-releve-signature-reset class="${btn} text-red-600">Supprimer la signature</button>` : ""}
           </div>
+
+          <div class="space-y-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+            <p class="text-xs font-medium uppercase tracking-wide text-zinc-400">En-tête</p>
+            <label class="block space-y-1 text-sm font-medium">
+              <span>Nom de l'école</span>
+              <textarea data-releve-ecole rows="3" placeholder="${esc(RELEVE_ECOLE)}"
+                class="block w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-sm font-normal shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20">${esc(releveEcole())}</textarea>
+            </label>
+            ${getParametre("releve_ecole") ? `<button type="button" data-releve-ecole-reset class="${btn}">Rétablir le texte par défaut</button>` : ""}
+            ${logoEcole ? `
+            <div class="flex h-24 items-center justify-center rounded-md border border-dashed border-zinc-200 bg-zinc-50 p-2">
+              <img src="${esc(logoEcole)}" alt="Logo de l'école" class="max-h-full max-w-full object-contain">
+            </div>` : `
+            <p class="text-sm text-zinc-500">Aucun logo : importez une image pour l'afficher en haut du relevé à la place du nom de l'école et de la section.</p>`}
+            <label class="${btn} cursor-pointer">
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" data-releve-logo-file class="sr-only">
+              ${logoEcole ? "Remplacer le logo…" : "Importer un logo…"}
+            </label>
+            ${logoEcole ? `<button type="button" data-releve-logo-reset class="${btn} text-red-600">Supprimer le logo</button>` : ""}
+          </div>
         </div>
 
         <div class="min-w-0 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-100 p-4 shadow-sm">
@@ -4556,11 +4590,28 @@
       renderReleve(getSection(state.activeSectionId));
       return;
     }
+    if (el.matches("[data-releve-ecole]")) {
+      const texte = el.value.trim();
+      setParametre("releve_ecole", texte && texte !== RELEVE_ECOLE ? texte : null);
+      persist();
+      renderReleve(getSection(state.activeSectionId));
+      return;
+    }
+    if (el.matches("[data-releve-logo-file]")) {
+      importerImageReleve(el, "releve_logo", /^image\/(png|jpeg|webp|svg\+xml)$/, "PNG, JPEG, WebP ou SVG", "Logo enregistré.");
+      return;
+    }
     if (!el.matches("[data-releve-signature-file]")) return;
+    importerImageReleve(el, "releve_signature", /^image\/(png|jpeg|webp)$/, "PNG, JPEG ou WebP", "Signature enregistrée.",
+      () => setParametre("releve_signature_active", "1"));
+  }
+
+  /** Lit l'image choisie dans un champ fichier et l'enregistre (data URL) dans le paramètre `cle`. */
+  function importerImageReleve(el, cle, types, formats, message, apres) {
     const file = el.files && el.files[0];
     if (!file) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
-      toast("Format attendu : image PNG, JPEG ou WebP.", "error");
+    if (!types.test(file.type)) {
+      toast(`Format attendu : image ${formats}.`, "error");
       return;
     }
     if (file.size > SIGNATURE_MAX_OCTETS) {
@@ -4570,15 +4621,15 @@
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        setParametre("releve_signature", reader.result);
-        setParametre("releve_signature_active", "1");
+        setParametre(cle, reader.result);
+        if (apres) apres();
       } catch (e) {
         toast(`Erreur base de données : ${errMsg(e)}`, "error");
         return;
       }
       persist();
       renderReleve(getSection(state.activeSectionId));
-      toast("Signature enregistrée.");
+      toast(message);
     };
     reader.onerror = () => toast("Lecture de l'image impossible.", "error");
     reader.readAsDataURL(file);
@@ -5174,8 +5225,11 @@ ${feuilles.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" 
         state.releveSid = Number(pick.dataset.releveSelect);
         renderReleve(getSection(state.activeSectionId));
       }
-      if (e.target.closest("[data-releve-signature-reset]")) {
-        setParametre("releve_signature", null);
+      const reset = e.target.closest("[data-releve-signature-reset], [data-releve-logo-reset], [data-releve-ecole-reset]");
+      if (reset) {
+        const cle = reset.matches("[data-releve-signature-reset]") ? "releve_signature"
+          : reset.matches("[data-releve-logo-reset]") ? "releve_logo" : "releve_ecole";
+        setParametre(cle, null);
         persist();
         renderReleve(getSection(state.activeSectionId));
       }
