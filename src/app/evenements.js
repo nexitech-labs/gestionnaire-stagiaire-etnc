@@ -95,11 +95,10 @@ function bindEvents() {
       state.releveSid = Number(pick.dataset.releveSelect);
       renderReleve(getSection(state.activeSectionId));
     }
-    const reset = e.target.closest("[data-releve-signature-reset], [data-releve-logo-reset], [data-releve-ecole-reset]");
+    const reset = e.target.closest("[data-releve-signature-reset], [data-releve-logo-reset], [data-releve-logo-default], [data-releve-ecole-reset]");
     if (reset) {
-      const cle = reset.matches("[data-releve-signature-reset]") ? "releve_signature"
-        : reset.matches("[data-releve-logo-reset]") ? "releve_logo" : "releve_ecole";
-      setParametre(cle, null);
+      if (reset.matches("[data-releve-logo-reset]")) setParametre("releve_logo", RELEVE_SANS_LOGO); // sans logo : texte de l'école
+      else setParametre(reset.matches("[data-releve-signature-reset]") ? "releve_signature" : reset.matches("[data-releve-logo-default]") ? "releve_logo" : "releve_ecole", null);
       persist();
       renderReleve(getSection(state.activeSectionId));
     }
@@ -205,8 +204,9 @@ function bindEvents() {
   $("grille-modal").addEventListener("input", onGrilleInput);
   $("grille-modal").addEventListener("click", onGrilleClick);
   $("print-modal").addEventListener("click", onPrintModalClick);
-  // Logo du relevé en cache : disponible aussi pour Ctrl+P
+  // Logos du relevé en cache : disponibles aussi pour Ctrl+P
   new Image().src = RELEVE_LOGO;
+  new Image().src = RELEVE_LOGO_ECOLE;
   window.addEventListener("beforeprint", buildPrintSheet);
 }
 

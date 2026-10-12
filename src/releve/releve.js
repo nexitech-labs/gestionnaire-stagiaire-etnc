@@ -14,6 +14,10 @@ const RELEVE_COULEURS = { ecr: "#0f9f5a", cmg: "#c0504d", aisance_aquatique: "#2
 
 const RELEVE_LOGO = "assets/logo-ministere-armees.svg";
 
+const RELEVE_LOGO_ECOLE = "assets/ETNC.png"; // logo de l'école par défaut (en haut à droite)
+
+const RELEVE_SANS_LOGO = "aucun"; // valeur de « releve_logo » quand le moniteur a retiré le logo
+
 const SIGNATURE_MAX_OCTETS = 1024 * 1024;
 
 /** Nom de l'école en en-tête et en pied du relevé : texte saisi par le moniteur, sinon celui par défaut. */
@@ -21,9 +25,11 @@ function releveEcole() {
   return getParametre("releve_ecole") || RELEVE_ECOLE;
 }
 
-/** Logo de l'école en haut à droite du relevé (image importée) ; null si aucun. */
+/** Logo de l'école en haut à droite du relevé : image importée, sinon logo ETNC ; null si retiré. */
 function releveLogoEcole() {
-  return getParametre("releve_logo") || null;
+  const logo = getParametre("releve_logo");
+  if (logo === RELEVE_SANS_LOGO) return null;
+  return logo || RELEVE_LOGO_ECOLE;
 }
 
 /** Signature du relevé : image importée par le moniteur ; null si aucune ou désactivée. */
@@ -143,6 +149,7 @@ function renderReleve(s) {
   const active = getParametre("releve_signature_active") !== "0";
   const signature = getParametre("releve_signature");
   const logoEcole = releveLogoEcole();
+  const logoParam = getParametre("releve_logo"); // null : logo ETNC par défaut
   const btn = "inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium shadow-sm hover:bg-zinc-100";
 
   $("releve-content").innerHTML = `
@@ -193,12 +200,13 @@ function renderReleve(s) {
           <div class="flex h-24 items-center justify-center rounded-md border border-dashed border-zinc-200 bg-zinc-50 p-2">
             <img src="${esc(logoEcole)}" alt="Logo de l'école" class="max-h-full max-w-full object-contain">
           </div>` : `
-          <p class="text-sm text-zinc-500">Aucun logo : importez une image pour l'afficher en haut du relevé à la place du nom de l'école et de la section.</p>`}
+          <p class="text-sm text-zinc-500">Aucun logo : le nom de l'école et la section s'affichent en haut du relevé.</p>`}
           <label class="${btn} cursor-pointer">
             <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" data-releve-logo-file class="sr-only">
             ${logoEcole ? "Remplacer le logo…" : "Importer un logo…"}
           </label>
-          ${logoEcole ? `<button type="button" data-releve-logo-reset class="${btn} text-red-600">Supprimer le logo</button>` : ""}
+          ${logoParam ? `<button type="button" data-releve-logo-default class="${btn}">Rétablir le logo ETNC</button>` : ""}
+          ${logoEcole ? `<button type="button" data-releve-logo-reset class="${btn} text-red-600">Retirer le logo</button>` : ""}
         </div>
       </div>
 
