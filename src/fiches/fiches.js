@@ -5,7 +5,7 @@ const COLS_2400 = [
   { k: "date2400", label: "Date", type: "date", w: "w-36" },
   { k: "num", label: "Dossard", w: "w-16" },
   ...[400, 800, 1200, 1600].map((m) => ({ k: `p${m}`, label: String(m), w: "w-[4.5rem]", ph: "mm:ss" })),
-  { k: "perf", label: "Performance", w: "w-24" },
+  { k: "perf", label: "Perf", w: "w-24" },
   { k: "datePompes", label: "Date", type: "date", w: "w-36" },
   { k: "pompes", label: "Pompes", w: "w-20" },
   { k: "dateTractions", label: "Date", type: "date", w: "w-36" },
@@ -23,7 +23,7 @@ const FICHES = {
     cols: [
       { k: "num", label: "Dossard", w: "w-16" },
       ...[1, 2, 3, 4, 5, 6, 7].map((i) => ({ k: `km${i}`, label: `${i}° km`, w: "w-[4.5rem]", ph: "mm:ss" })),
-      { k: "perf", label: "Performance", w: "w-24" },
+      { k: "perf", label: "Perf", w: "w-24" },
     ],
   },
   natation: {
@@ -32,7 +32,7 @@ const FICHES = {
     cols: [
       { k: "apnee", label: "Apnée (m)", type: "distance", w: "w-20" },
       { k: "nage", label: "Distance de nage (m)", type: "distance", w: "w-20" },
-      { k: "perf", label: "Performance", w: "w-24" },
+      { k: "perf", label: "Perf", w: "w-24" },
     ],
   },
   f2400: {
@@ -158,9 +158,12 @@ function ficheColWidth(c) {
   return 13;
 }
 
-const FICHE_PAGE_W = 194; // A4 portrait moins les marges de 8 mm
+// A4 portrait moins les marges de 8 mm (194 mm), avec 4 mm de réserve : sinon le trait vertical
+// de la dernière colonne est rogné à l'impression (marges matérielles de l'imprimante, arrondis).
+const FICHE_PAGE_W = 190;
 
-const FICHE_ID_COLS = [["N°", 6, "ps-num"], ["Grade", 10, "ps-l"], ["Nom", 23, "ps-l"], ["Prénom", 18, "ps-l"], ["Sexe", 8, ""], ["Armée", 11, "ps-l"]];
+// N° : deux chiffres au plus ; grade : trois majuscules
+const FICHE_ID_COLS = [["N°", 5, "ps-num"], ["Grade", 8.5, "ps-l"], ["Nom", 23, "ps-l"], ["Prénom", 18, "ps-l"], ["Sexe", 8, ""], ["Armée", 11, "ps-l"]];
 
 /**
  * Fiche imprimable. Fiches physiques : noms des stagiaires et cases vides à remplir à la main.
@@ -192,7 +195,7 @@ function fichePrintHtml(s, id = ficheActive(), exemplaires = 1) {
       <div class="ps-date">${dateLine}</div>
       <div class="ps-stage">${esc(s.formation)} ${esc(s.annee_scolaire)} · Moniteur : ${esc(s.moniteur)}</div>
     </div>
-    <table class="ps-fiche">
+    <table class="ps-fiche" style="width:${FICHE_PAGE_W}mm">
       <thead><tr>
         ${FICHE_ID_COLS.map(([label, w, cls]) => `<th class="${cls}" style="width:${w}mm">${label}</th>`).join("")}
         ${cols.map((c, i) => `<th style="width:${(wanted[i] * k).toFixed(1)}mm">${esc(c.label)}</th>`).join("")}
